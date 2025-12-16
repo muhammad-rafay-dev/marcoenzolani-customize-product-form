@@ -1,3 +1,20 @@
+// Store credentials in the function (not ideal but free)
+const CONFIG = {
+  // Replace these with your actual values
+  GMAIL_USER: "mrafay.developer@gmail.com",
+  GMAIL_APP_PASSWORD: "btol kvrd hmel jfym",
+  NOTIFICATION_EMAIL: "mrafay.developer@gmail.com",
+  
+  // Optional: Add a simple obfuscation
+  getCredentials: function() {
+    return {
+      user: this.GMAIL_USER,
+      pass: this.GMAIL_APP_PASSWORD,
+      to: this.NOTIFICATION_EMAIL
+    };
+  }
+};
+
 // netlify/functions/submit-customization.js
 const Busboy = require('busboy');
 const nodemailer = require('nodemailer');
@@ -117,8 +134,8 @@ async function sendGmail(emailContent, files) {
   const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-      user: process.env.GMAIL_USER,
-      pass: process.env.GMAIL_APP_PASSWORD
+      user: CONFIG.GMAIL_USER,
+      pass: CONFIG.GMAIL_APP_PASSWORD
     }
   });
   
@@ -136,10 +153,10 @@ async function sendGmail(emailContent, files) {
   const mailOptions = {
     from: {
       name: 'Marco Enzolani Customizations',
-      address: process.env.GMAIL_USER
+      address: CONFIG.GMAIL_USER
     },
-    to: process.env.NOTIFICATION_EMAIL || process.env.GMAIL_USER,
-    replyTo: emailContent.fields.email || process.env.GMAIL_USER,
+    to: CONFIG.NOTIFICATION_EMAIL || CONFIG.GMAIL_USER,
+    replyTo: emailContent.fields.email || CONFIG.GMAIL_USER,
     subject: emailContent.subject,
     html: emailContent.html,
     text: emailContent.text,
