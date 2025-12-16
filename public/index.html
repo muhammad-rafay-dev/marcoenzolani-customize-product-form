@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Marco Enzolani - Function Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 40px; max-width: 600px; margin: 0 auto; }
+        h1 { color: #333; }
+        .test-box { 
+            background: #f8f9fa; 
+            padding: 30px; 
+            border-radius: 10px; 
+            margin: 20px 0; 
+            border: 2px dashed #ddd; 
+        }
+        button { 
+            background: #000; 
+            color: white; 
+            border: none; 
+            padding: 12px 24px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-size: 16px; 
+            margin: 10px 5px; 
+        }
+        button:hover { background: #333; }
+        pre { 
+            background: #fff; 
+            padding: 15px; 
+            border-radius: 5px; 
+            overflow: auto; 
+            border: 1px solid #ddd; 
+        }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Netlify Function Test</h1>
+    <p>Testing the Marco Enzolani customization form backend</p>
+    
+    <div class="test-box">
+        <h3>Test 1: Check Function Status</h3>
+        <button onclick="testFunction()">Test GET Request</button>
+        <pre id="test1"></pre>
+    </div>
+    
+    <div class="test-box">
+        <h3>Test 2: Submit Sample Form</h3>
+        <button onclick="submitTestForm()">Submit Test Form</button>
+        <pre id="test2"></pre>
+    </div>
+    
+    <div class="test-box">
+        <h3>Test 3: Submit with File Upload</h3>
+        <input type="file" id="testFile">
+        <button onclick="submitWithFile()">Submit with File</button>
+        <pre id="test3"></pre>
+    </div>
+    
+    <script>
+        const FUNCTION_URL = '/.netlify/functions/submit-customization';
+        
+        async function testFunction() {
+            const result = document.getElementById('test1');
+            result.innerHTML = 'Testing...';
+            
+            try {
+                const response = await fetch(FUNCTION_URL, { method: 'GET' });
+                const text = await response.text();
+                result.innerHTML = `Status: ${response.status}\n\n${text}`;
+            } catch (error) {
+                result.innerHTML = `Error: ${error.message}`;
+            }
+        }
+        
+        async function submitTestForm() {
+            const result = document.getElementById('test2');
+            result.innerHTML = 'Submitting...';
+            
+            const formData = new FormData();
+            formData.append('name', 'Test Customer');
+            formData.append('email', 'test@example.com');
+            formData.append('phone', '+1234567890');
+            formData.append('product_id', 'test-123');
+            formData.append('product_title', 'Test Leather Jacket');
+            formData.append('custom_option_lc', 'black');
+            formData.append('description', 'This is a test submission from the Netlify test page.');
+            
+            try {
+                const response = await fetch(FUNCTION_URL, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                result.innerHTML = JSON.stringify(data, null, 2);
+                
+                if (data.success) {
+                    result.className = 'success';
+                    alert(`✅ Success! Order ID: ${data.id}`);
+                } else {
+                    result.className = 'error';
+                }
+            } catch (error) {
+                result.innerHTML = `Error: ${error.message}`;
+                result.className = 'error';
+            }
+        }
+        
+        async function submitWithFile() {
+            const result = document.getElementById('test3');
+            const fileInput = document.getElementById('testFile');
+            
+            if (!fileInput.files.length) {
+                alert('Please select a file first');
+                return;
+            }
+            
+            result.innerHTML = 'Uploading file...';
+            
+            const formData = new FormData();
+            formData.append('name', 'File Test');
+            formData.append('email', 'filetest@example.com');
+            formData.append('phone', '+1234567890');
+            formData.append('product_id', 'test-file-456');
+            formData.append('product_title', 'Test with File Upload');
+            formData.append('custom_option_lc', 'brown');
+            formData.append('test_file', fileInput.files[0]);
+            
+            try {
+                const response = await fetch(FUNCTION_URL, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                result.innerHTML = JSON.stringify(data, null, 2);
+                
+                if (data.success) {
+                    result.className = 'success';
+                    alert(`✅ File uploaded successfully! Order ID: ${data.id}`);
+                } else {
+                    result.className = 'error';
+                }
+            } catch (error) {
+                result.innerHTML = `Error: ${error.message}`;
+                result.className = 'error';
+            }
+        }
+    </script>
+</body>
+</html>

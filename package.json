@@ -1,0 +1,20 @@
+{
+  "name": "marcoenzolani-customize",
+  "version": "1.0.0",
+  "description": "Customization form for Marco Enzolani Shopify store",
+  "main": "netlify/functions/submit-customization.js",
+  "scripts": {
+    "dev": "netlify dev",
+    "build": "echo 'No build step required'"
+  },
+  "dependencies": {
+    "busboy": "^1.6.0",
+    "nodemailer": "^6.9.7"
+  },
+  "devDependencies": {
+    "netlify-cli": "^17.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
