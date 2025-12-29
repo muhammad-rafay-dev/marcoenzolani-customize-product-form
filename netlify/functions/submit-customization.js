@@ -192,40 +192,58 @@ function getOptionText(optionValue, otherValue, defaultValue = 'No Change') {
 
 // Prepare email content
 function prepareEmailContent(fields, files, orderId) {
-  const fileListHtml = files.map(file => `
+  // Filter only files that have actual content (not empty)
+  const validFiles = files.filter(file => file.size > 0 && file.filename);
+  
+  console.log(`📊 Valid files: ${validFiles.length} out of ${files.length} total`);
+  
+  // Only show files that were actually uploaded
+  const fileListHtml = validFiles.map(file => `
     <div style="margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 4px;">
       <strong>${file.fieldName}:</strong> ${escapeHtml(file.filename)}<br>
       <small>Size: ${(file.size / 1024).toFixed(2)} KB</small>
     </div>
   `).join('');
   
-  const fileListText = files.map(file => 
+  const fileListText = validFiles.map(file => 
     `• ${file.fieldName}: ${file.filename} (${(file.size / 1024).toFixed(2)} KB)`
   ).join('\n');
   
-  // Get artwork placement list
+  // Get artwork placement list (only show if checkbox is checked AND file is uploaded)
   const artworkPlacements = [];
-  if (fields.artwork_left_chest === 'yes') artworkPlacements.push('Left Chest');
-  if (fields.artwork_right_chest === 'yes') artworkPlacements.push('Right Chest');
-  if (fields.artwork_left_arm === 'yes') artworkPlacements.push('Left Arm');
-  if (fields.artwork_right_arm === 'yes') artworkPlacements.push('Right Arm');
-  if (fields.artwork_back === 'yes') artworkPlacements.push('Back');
-  if (fields.artwork_other === 'yes') artworkPlacements.push('Other Location');
+  const artworkFiles = {};
+  
+  // Check each artwork placement
+  const artworkMappings = [
+    { field: 'artwork_left_chest', fileField: 'co_left_chest_image', label: 'Left Chest' },
+    { field: 'artwork_right_chest', fileField: 'co_right_chest_image', label: 'Right Chest' },
+    { field: 'artwork_left_arm', fileField: 'co_left_arm_image', label: 'Left Arm' },
+    { field: 'artwork_right_arm', fileField: 'co_right_arm_image', label: 'Right Arm' },
+    { field: 'artwork_back', fileField: 'co_back_img_image', label: 'Back' },
+    { field: 'artwork_other', fileField: 'co_other_img_image', label: 'Other Location' }
+  ];
+  
+  artworkMappings.forEach(mapping => {
+    const hasFile = validFiles.some(file => file.fieldName === mapping.fileField);
+    if (fields[mapping.field] === 'yes' && hasFile) {
+      artworkPlacements.push(mapping.label);
+    }
+  });
   
   const artworkHtml = artworkPlacements.length > 0 
     ? `<ul style="margin: 5px 0 0 20px;">
         ${artworkPlacements.map(placement => `<li>${placement}</li>`).join('')}
        </ul>`
-    : '<p style="color: #666;"><em>No artwork placement selected</em></p>';
+    : '<p style="color: #666;"><em>No artwork files uploaded</em></p>';
   
   const artworkText = artworkPlacements.length > 0
     ? artworkPlacements.map(p => `• ${p}`).join('\n')
-    : 'No artwork placement selected';
+    : 'No artwork files uploaded';
   
   return {
     orderId,
     fields,
-    files,
+    files: validFiles, // Only send valid files
     subject: `🎨 Customization Request #${orderId}: ${fields.product_title || 'Marco Enzolani Product'}`,
     html: `
       <!DOCTYPE html>
@@ -239,7 +257,7 @@ function prepareEmailContent(fields, files, orderId) {
           .field { margin: 12px 0; padding: 8px 0; }
           .field-label { font-weight: bold; color: #555; display: inline-block; min-width: 140px; }
           .file-count {
-            background: #4CAF50;
+            background: ${validFiles.length > 0 ? '#4CAF50' : '#6c757d'};
             color: white;
             padding: 3px 10px;
             border-radius: 12px;
@@ -257,13 +275,14 @@ function prepareEmailContent(fields, files, orderId) {
           .option-group { margin: 10px 0; }
           .status-badge {
             display: inline-block;
-            padding: 2px 8px;
+            padding: 4px 12px;
             border-radius: 4px;
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 500;
           }
           .status-selected { background: #d4edda; color: #155724; }
           .status-default { background: #f8f9fa; color: #6c757d; }
+          .status-other { background: #fff3cd; color: #856404; }
           .order-id {
             font-family: monospace;
             font-size: 18px;
@@ -275,6 +294,11 @@ function prepareEmailContent(fields, files, orderId) {
             display: inline-block;
           }
           hr { border: none; border-top: 1px solid #e0e0e0; margin: 25px 0; }
+          .empty-file-note {
+            color: #dc3545;
+            font-size: 12px;
+            margin-top: 5px;
+          }
         </style>
       </head>
       <body>
@@ -285,7 +309,14 @@ function prepareEmailContent(fields, files, orderId) {
             <span class="order-id">#${orderId}</span>
           </p>
           <p style="margin: 5px 0;"><strong>Timestamp:</strong> ${new Date().toLocaleString()}</p>
-          <p style="margin: 5px 0;"><strong>Files Attached:</strong> <span class="file-count">${files.length}</span></p>
+          <p style="margin: 5px 0;">
+            <strong>Files Attached:</strong> 
+            <span class="file-count">${validFiles.length} / ${files.length}</span>
+            ${validFiles.length < files.length ? 
+              `<span class="empty-file-note">(${files.length - validFiles.length} empty files filtered)</span>` : 
+              ''
+            }
+          </p>
         </div>
         
         <div class="section">
@@ -310,7 +341,7 @@ function prepareEmailContent(fields, files, orderId) {
             <span class="field-label">Product ID:</span> ${escapeHtml(fields.product_id || 'Not specified')}
           </div>
           <div class="field">
-            <span class="field-label">Product URL:</span> <a href="${escapeHtml(fields.product_url || '#')}">View Product</a>
+            <span class="field-label">Product URL:</span> <a href="${escapeHtml(fields.product_url || '#')}">${escapeHtml(fields.product_url || 'Not specified')}</a>
           </div>
           ${fields.product_image ? `
           <div class="field">
@@ -327,36 +358,84 @@ function prepareEmailContent(fields, files, orderId) {
           <div class="option-group">
             <div class="field">
               <span class="field-label">Leather Color:</span>
-              <span class="status-badge ${fields.custom_option_lc && fields.custom_option_lc !== 'none' ? 'status-selected' : 'status-default'}">
-                ${getOptionText(fields.custom_option_lc, fields.custom_option_lc_other)}
-              </span>
+              ${(() => {
+                const value = fields.custom_option_lc;
+                const other = fields.custom_option_lc_other;
+                let badgeClass = 'status-default';
+                let displayText = 'No Change';
+                
+                if (value && value !== 'none') {
+                  badgeClass = value === 'other' ? 'status-other' : 'status-selected';
+                  displayText = value === 'other' && other ? 
+                    `Other: ${escapeHtml(other)}` : 
+                    escapeHtml(value.charAt(0).toUpperCase() + value.slice(1));
+                }
+                
+                return `<span class="status-badge ${badgeClass}">${displayText}</span>`;
+              })()}
             </div>
           </div>
           
           <div class="option-group">
             <div class="field">
               <span class="field-label">Leather Type:</span>
-              <span class="status-badge ${fields.custom_option_lt && fields.custom_option_lt !== 'none' ? 'status-selected' : 'status-default'}">
-                ${getOptionText(fields.custom_option_lt, fields.custom_option_lt_other)}
-              </span>
+              ${(() => {
+                const value = fields.custom_option_lt;
+                const other = fields.custom_option_lt_other;
+                let badgeClass = 'status-default';
+                let displayText = 'No Change';
+                
+                if (value && value !== 'none') {
+                  badgeClass = value === 'other' ? 'status-other' : 'status-selected';
+                  displayText = value === 'other' && other ? 
+                    `Other: ${escapeHtml(other)}` : 
+                    escapeHtml(value.charAt(0).toUpperCase() + value.slice(1));
+                }
+                
+                return `<span class="status-badge ${badgeClass}">${displayText}</span>`;
+              })()}
             </div>
           </div>
           
           <div class="option-group">
             <div class="field">
               <span class="field-label">Inner Lining:</span>
-              <span class="status-badge ${fields.custom_option_il && fields.custom_option_il !== 'none' ? 'status-selected' : 'status-default'}">
-                ${getOptionText(fields.custom_option_il, fields.custom_option_il_other)}
-              </span>
+              ${(() => {
+                const value = fields.custom_option_il;
+                const other = fields.custom_option_il_other;
+                let badgeClass = 'status-default';
+                let displayText = 'No Change';
+                
+                if (value && value !== 'none') {
+                  badgeClass = value === 'other' ? 'status-other' : 'status-selected';
+                  displayText = value === 'other' && other ? 
+                    `Other: ${escapeHtml(other)}` : 
+                    escapeHtml(value.charAt(0).toUpperCase() + value.slice(1));
+                }
+                
+                return `<span class="status-badge ${badgeClass}">${displayText}</span>`;
+              })()}
             </div>
           </div>
           
           <div class="option-group">
             <div class="field">
               <span class="field-label">Hardware Color:</span>
-              <span class="status-badge ${fields.custom_option_hc && fields.custom_option_hc !== 'none' ? 'status-selected' : 'status-default'}">
-                ${getOptionText(fields.custom_option_hc, fields.custom_option_hc_other)}
-              </span>
+              ${(() => {
+                const value = fields.custom_option_hc;
+                const other = fields.custom_option_hc_other;
+                let badgeClass = 'status-default';
+                let displayText = 'No Change';
+                
+                if (value && value !== 'none') {
+                  badgeClass = value === 'other' ? 'status-other' : 'status-selected';
+                  displayText = value === 'other' && other ? 
+                    `Other: ${escapeHtml(other)}` : 
+                    escapeHtml(value.charAt(0).toUpperCase() + value.slice(1));
+                }
+                
+                return `<span class="status-badge ${badgeClass}">${displayText}</span>`;
+              })()}
             </div>
           </div>
           
@@ -365,6 +444,10 @@ function prepareEmailContent(fields, files, orderId) {
               <span class="field-label" style="vertical-align: top;">Artwork Placement:</span>
               <div style="display: inline-block;">
                 ${artworkHtml}
+                ${artworkPlacements.length === 0 ? 
+                  '<p style="font-size: 12px; color: #666; margin-top: 5px;">No files uploaded for artwork</p>' : 
+                  ''
+                }
               </div>
             </div>
           </div>
@@ -379,16 +462,21 @@ function prepareEmailContent(fields, files, orderId) {
         </div>
         ` : ''}
         
-        ${files.length > 0 ? `
+        ${validFiles.length > 0 ? `
         <div class="section">
-          <h3 class="section-title">📎 Uploaded Files (${files.length} attached)</h3>
-          <p>The following files are attached to this email:</p>
+          <h3 class="section-title">📎 Uploaded Files (${validFiles.length} attached)</h3>
+          <p>The following files were uploaded and are attached to this email:</p>
           ${fileListHtml}
           <div class="customization-note">
-            <strong>ℹ️ Note:</strong> These files are attached to this email. You can download them directly from your email client.
+            <strong>ℹ️ Note:</strong> Only files with actual content are shown above and attached to this email.
           </div>
         </div>
-        ` : ''}
+        ` : `
+        <div class="section">
+          <h3 class="section-title">📎 Uploaded Files</h3>
+          <p style="color: #666; font-style: italic;">No files were uploaded with this request.</p>
+        </div>
+        `}
         
         <hr>
         <div style="text-align: center; color: #666; font-size: 13px; padding: 15px;">
@@ -402,6 +490,9 @@ function prepareEmailContent(fields, files, orderId) {
           <p style="margin: 5px 0; font-size: 12px;">
             Product: ${escapeHtml(fields.product_title || 'N/A')}
           </p>
+          <p style="margin: 5px 0; font-size: 11px; color: #999;">
+            Files: ${validFiles.length} uploaded, ${files.length - validFiles.length} empty filtered
+          </p>
         </div>
       </body>
       </html>
@@ -413,7 +504,7 @@ function prepareEmailContent(fields, files, orderId) {
       
       REQUEST ID: #${orderId}
       TIMESTAMP: ${new Date().toLocaleString()}
-      FILES: ${files.length} attached
+      FILES: ${validFiles.length} uploaded (${files.length - validFiles.length} empty filtered)
       
       --------------------------------------------------
       👤 CUSTOMER INFORMATION
@@ -447,14 +538,19 @@ function prepareEmailContent(fields, files, orderId) {
       ${fields.description}
       ` : ''}
       
-      ${files.length > 0 ? `
+      ${validFiles.length > 0 ? `
       --------------------------------------------------
-      📎 UPLOADED FILES (${files.length} attached)
+      📎 UPLOADED FILES (${validFiles.length} attached)
       --------------------------------------------------
       ${fileListText}
       
-      Note: These files are attached to this email.
-      ` : ''}
+      Note: Only files with actual content are attached to this email.
+      ` : `
+      --------------------------------------------------
+      📎 UPLOADED FILES
+      --------------------------------------------------
+      No files were uploaded with this request.
+      `}
       
       =====================================
       SUBMISSION DETAILS
@@ -462,6 +558,7 @@ function prepareEmailContent(fields, files, orderId) {
       Submitted via Marco Enzolani Customization Form
       Request ID: #${orderId}
       Timestamp: ${new Date().toLocaleString()}
+      Files: ${validFiles.length} uploaded
       
       =====================================
     `
