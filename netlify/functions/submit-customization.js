@@ -244,7 +244,7 @@ function prepareEmailContent(fields, files, orderId) {
     orderId,
     fields,
     files: validFiles, // Only send valid files
-    subject: `🎨 Customization Request #${orderId}: ${fields.product_title || 'Marco Enzolani Product'}`,
+    subject: `Customization Request #${orderId}: ${fields.product_title || 'MarcoEnzolani Product'}`,
     html: `
       <!DOCTYPE html>
       <html>
@@ -499,7 +499,7 @@ function prepareEmailContent(fields, files, orderId) {
     `,
     text: `
       =====================================
-      🎨 NEW CUSTOMIZATION REQUEST
+      🎨 CUSTOMIZATION REQUEST
       =====================================
       
       REQUEST ID: #${orderId}
