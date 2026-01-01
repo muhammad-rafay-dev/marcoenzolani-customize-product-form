@@ -130,20 +130,21 @@ function parseFormData(event) {
   });
 }
 
-// Generate numeric-only order ID (8-digit random number)
+// Generate numeric-only order ID (6-digit random number)
 function generateNumericOrderId() {
-  // Generate 8-digit random number (10000000 to 99999999)
-  const min = 10000000;
-  const max = 99999999;
+  // Generate 6-digit random number (100000 to 999999)
+  const min = 100000;
+  const max = 999999;
   const randomNum = Math.floor(Math.random() * (max - min + 1)) + min;
   
   // Add timestamp for more uniqueness (optional)
-  const timestamp = Date.now() % 1000000; // Last 6 digits of timestamp
-  const finalId = (randomNum + timestamp) % 100000000; // Ensure 8 digits
+  const timestamp = Date.now() % 100000; // Last 5 digits of timestamp
+  const finalId = (randomNum + timestamp) % 1000000; // Ensure 6 digits
   
-  // Ensure it's 8 digits with leading zeros if needed
-  return String(finalId).padStart(8, '0');
+  // Ensure it's 6 digits with leading zeros if needed
+  return String(finalId).padStart(6, '0');
 }
+
 
 // Send email via Gmail
 async function sendGmail(emailContent, files, includeAttachments = false) {
@@ -171,7 +172,7 @@ async function sendGmail(emailContent, files, includeAttachments = false) {
   // Email options
   const mailOptions = {
     from: {
-      name: 'Marcoenzolani Customizations',
+      name: 'Marcoenzolani Customize Product Form',
       address: CONFIG.GMAIL_USER
     },
     to: emailContent.to,
@@ -514,7 +515,7 @@ function prepareAdminEmailContent(fields, files, orderId) {
         <hr>
         <div style="text-align: center; color: #666; font-size: 13px; padding: 15px;">
           <p style="margin: 5px 0;">
-            <strong>Submitted via Marcoenzolani Customization Form</strong>
+            <strong>Submitted via Marcoenzolani Customize This Product Form</strong>
           </p>
           <p style="margin: 5px 0;">
             Request ID: <strong class="order-id" style="font-size: 14px;">#${orderId}</strong> | 
@@ -599,7 +600,7 @@ function prepareAdminEmailContent(fields, files, orderId) {
       =====================================
       SUBMISSION DETAILS
       =====================================
-      Submitted via Marcoenzolani Customization Form
+      Submitted via Marcoenzolani Customize This Product Form
       Request ID: #${orderId}
       Timestamp: ${new Date().toLocaleString()}
       Files: ${validFiles.length} uploaded
@@ -762,10 +763,7 @@ function prepareUserEmailContent(fields, files, orderId) {
         
         <div class="footer">
           <p style="margin: 5px 0;">
-            <strong>Marcoenzolani Customizations</strong>
-          </p>
-          <p style="margin: 5px 0; font-size: 13px;">
-            Handcrafted Excellence Since [Year]
+            <strong>Marcoenzolani Customize Product Form</strong>
           </p>
           <p style="margin: 5px 0; font-size: 12px; color: #999;">
             Request ID: #${orderId} | Submitted: ${new Date().toLocaleString()}
@@ -816,7 +814,6 @@ function prepareUserEmailContent(fields, files, orderId) {
       Please contact us using your Request ID: #${orderId}
       
       Email: mrafay.developer@gmail.com
-      Phone: [Your Business Phone Number]
       
       =============================================
       THANK YOU FOR CHOOSING Marcoenzolani
