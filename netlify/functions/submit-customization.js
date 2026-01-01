@@ -39,11 +39,20 @@ exports.handler = async function(event, context) {
     // Generate unique numeric order ID
     const orderId = generateNumericOrderId();
     
-    // Prepare email content
-    const emailContent = prepareEmailContent(fields, files, orderId);
+    // Prepare email contents for both admin and user
+    const adminEmailContent = prepareAdminEmailContent(fields, files, orderId);
+    const userEmailContent = prepareUserEmailContent(fields, files, orderId);
     
-    // Send email using Gmail WITH attachments
-    await sendGmail(emailContent, files);
+    // Send email to admin WITH attachments
+    await sendGmail(adminEmailContent, files, true);
+    
+    // Send confirmation email to user WITHOUT attachments
+    if (fields.email) {
+      await sendGmail(userEmailContent, [], false);
+      console.log(`✅ Confirmation email sent to user: ${fields.email}`);
+    } else {
+      console.log('⚠️ No user email provided, skipping confirmation email');
+    }
     
     // Return success response
     return {
@@ -56,7 +65,8 @@ exports.handler = async function(event, context) {
         success: true,
         id: orderId,
         message: 'Customization request submitted successfully!',
-        files_received: files.length
+        files_received: files.length,
+        confirmation_sent: !!fields.email
       })
     };
     
@@ -135,8 +145,8 @@ function generateNumericOrderId() {
   return String(finalId).padStart(8, '0');
 }
 
-// Send email via Gmail WITH FILE ATTACHMENTS
-async function sendGmail(emailContent, files) {
+// Send email via Gmail
+async function sendGmail(emailContent, files, includeAttachments = false) {
   // Create transporter using Gmail
   const transporter = nodemailer.createTransport({
     service: 'gmail',
@@ -146,39 +156,45 @@ async function sendGmail(emailContent, files) {
     }
   });
   
-  // Prepare attachments
-  const attachments = files.map(file => ({
-    filename: file.filename,
-    content: file.content,
-    contentType: file.mimeType || 'application/octet-stream',
-    encoding: 'base64'
-  }));
+  // Prepare attachments if needed
+  const attachments = includeAttachments 
+    ? files.map(file => ({
+        filename: file.filename,
+        content: file.content,
+        contentType: file.mimeType || 'application/octet-stream',
+        encoding: 'base64'
+      }))
+    : [];
   
-  console.log(`📧 Preparing to send email with ${attachments.length} attachments`);
+  console.log(`📧 Preparing to send ${includeAttachments ? 'admin' : 'user'} email with ${attachments.length} attachments`);
   
   // Email options
   const mailOptions = {
     from: {
-      name: 'Marco Enzolani Customizations',
+      name: 'Marcoenzolani Customizations',
       address: CONFIG.GMAIL_USER
     },
-    to: CONFIG.NOTIFICATION_EMAIL || CONFIG.GMAIL_USER,
-    replyTo: emailContent.fields.email || CONFIG.GMAIL_USER,
+    to: emailContent.to,
     subject: emailContent.subject,
     html: emailContent.html,
     text: emailContent.text,
     attachments: attachments
   };
   
+  // Add replyTo for admin email
+  if (emailContent.replyTo) {
+    mailOptions.replyTo = emailContent.replyTo;
+  }
+  
   // Send email
   try {
     const info = await transporter.sendMail(mailOptions);
-    console.log('✅ Email sent successfully!');
+    console.log(`✅ ${includeAttachments ? 'Admin' : 'User confirmation'} email sent successfully to ${emailContent.to}!`);
     console.log('📎 Message ID:', info.messageId);
     
     return info;
   } catch (error) {
-    console.error('❌ Failed to send email:', error);
+    console.error(`❌ Failed to send ${includeAttachments ? 'admin' : 'user'} email:`, error);
     throw error;
   }
 }
@@ -190,8 +206,8 @@ function getOptionText(optionValue, otherValue, defaultValue = 'No Change') {
   return escapeHtml(optionValue.charAt(0).toUpperCase() + optionValue.slice(1));
 }
 
-// Prepare email content
-function prepareEmailContent(fields, files, orderId) {
+// Prepare admin email content
+function prepareAdminEmailContent(fields, files, orderId) {
   // Filter only files that have actual content (not empty)
   const validFiles = files.filter(file => file.size > 0 && file.filename);
   
@@ -211,7 +227,6 @@ function prepareEmailContent(fields, files, orderId) {
   
   // Get artwork placement list (only show if checkbox is checked AND file is uploaded)
   const artworkPlacements = [];
-  const artworkFiles = {};
   
   // Check each artwork placement
   const artworkMappings = [
@@ -241,17 +256,16 @@ function prepareEmailContent(fields, files, orderId) {
     : 'No artwork files uploaded';
   
   return {
-    orderId,
-    fields,
-    files: validFiles, // Only send valid files
-    subject: `Customization Request #${orderId}: ${fields.product_title || 'MarcoEnzolani Product'}`,
+    to: CONFIG.NOTIFICATION_EMAIL || CONFIG.GMAIL_USER,
+    replyTo: fields.email || CONFIG.GMAIL_USER,
+    subject: `🚨 Customization Request #${orderId}: ${fields.product_title || 'Marcoenzolani Customize This Product'}`,
     html: `
       <!DOCTYPE html>
       <html>
       <head>
         <style>
           body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; }
-          .header { background: #f8f9fa; padding: 20px; border-radius: 5px; margin-bottom: 20px; }
+          .header { background: #fff3f3; padding: 20px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #dc3545; }
           .section { margin: 20px 0; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px; background: white; }
           .section-title { color: #000; font-size: 18px; margin-top: 0; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #f0f0f0; }
           .field { margin: 12px 0; padding: 8px 0; }
@@ -294,16 +308,29 @@ function prepareEmailContent(fields, files, orderId) {
             display: inline-block;
           }
           hr { border: none; border-top: 1px solid #e0e0e0; margin: 25px 0; }
-          .empty-file-note {
-            color: #dc3545;
-            font-size: 12px;
-            margin-top: 5px;
+          .do-not-reply {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #6c757d;
+            margin: 20px 0;
+            font-size: 14px;
+            color: #666;
+          }
+          .admin-alert {
+            background: #fff3f3;
+            border: 1px solid #f5c6cb;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+            font-size: 14px;
+            color: #721c24;
           }
         </style>
       </head>
       <body>
         <div class="header">
-          <h2 style="margin: 0; color: #000;">🎨 New Customization Request</h2>
+          <h2 style="margin: 0; color: #000;">🚨 NEW CUSTOMIZATION REQUEST - ACTION REQUIRED</h2>
           <p style="margin: 10px 0; font-size: 16px;">
             <strong>Request ID:</strong> 
             <span class="order-id">#${orderId}</span>
@@ -312,11 +339,11 @@ function prepareEmailContent(fields, files, orderId) {
           <p style="margin: 5px 0;">
             <strong>Files Attached:</strong> 
             <span class="file-count">${validFiles.length} / ${files.length}</span>
-            ${validFiles.length < files.length ? 
-              `<span class="empty-file-note">(${files.length - validFiles.length} empty files filtered)</span>` : 
-              ''
-            }
           </p>
+          <div class="admin-alert">
+            <strong>⚠️ ADMIN ACTION REQUIRED:</strong> 
+            Please review this customization request and contact the customer within 24 hours.
+          </div>
         </div>
         
         <div class="section">
@@ -351,7 +378,7 @@ function prepareEmailContent(fields, files, orderId) {
           ` : ''}
         </div>
         
-        <!-- ✅ CUSTOMIZATION OPTIONS SECTION -->
+        <!-- CUSTOMIZATION OPTIONS SECTION -->
         <div class="section">
           <h3 class="section-title">🎨 Customization Options</h3>
           
@@ -478,10 +505,16 @@ function prepareEmailContent(fields, files, orderId) {
         </div>
         `}
         
+        <div class="do-not-reply">
+          <strong>📧 IMPORTANT:</strong> This email was sent to <strong>${CONFIG.NOTIFICATION_EMAIL || CONFIG.GMAIL_USER}</strong> only.<br>
+          <strong>DO NOT REPLY TO THIS EMAIL.</strong> Instead, reply to the customer's email directly at: 
+          ${fields.email ? `<a href="mailto:${escapeHtml(fields.email)}">${escapeHtml(fields.email)}</a>` : 'No customer email provided'}
+        </div>
+        
         <hr>
         <div style="text-align: center; color: #666; font-size: 13px; padding: 15px;">
           <p style="margin: 5px 0;">
-            <strong>Submitted via Marco Enzolani Customization Form</strong>
+            <strong>Submitted via Marcoenzolani Customization Form</strong>
           </p>
           <p style="margin: 5px 0;">
             Request ID: <strong class="order-id" style="font-size: 14px;">#${orderId}</strong> | 
@@ -499,12 +532,15 @@ function prepareEmailContent(fields, files, orderId) {
     `,
     text: `
       =====================================
-      🎨 CUSTOMIZATION REQUEST
+      🚨 NEW CUSTOMIZATION REQUEST - ACTION REQUIRED
       =====================================
       
       REQUEST ID: #${orderId}
       TIMESTAMP: ${new Date().toLocaleString()}
       FILES: ${validFiles.length} uploaded (${files.length - validFiles.length} empty filtered)
+      
+      ⚠️ ADMIN ACTION REQUIRED: 
+      Please review this customization request and contact the customer within 24 hours.
       
       --------------------------------------------------
       👤 CUSTOMER INFORMATION
@@ -553,14 +589,244 @@ function prepareEmailContent(fields, files, orderId) {
       `}
       
       =====================================
+      📧 IMPORTANT EMAIL INFORMATION
+      =====================================
+      DO NOT REPLY TO THIS EMAIL.
+      This email was sent to ${CONFIG.NOTIFICATION_EMAIL || CONFIG.GMAIL_USER} only.
+      
+      Reply to the customer directly at: ${fields.email || 'No customer email provided'}
+      
+      =====================================
       SUBMISSION DETAILS
       =====================================
-      Submitted via Marco Enzolani Customization Form
+      Submitted via Marcoenzolani Customization Form
       Request ID: #${orderId}
       Timestamp: ${new Date().toLocaleString()}
       Files: ${validFiles.length} uploaded
       
       =====================================
+    `
+  };
+}
+
+// Prepare user confirmation email content
+function prepareUserEmailContent(fields, files, orderId) {
+  const validFiles = files.filter(file => file.size > 0 && file.filename);
+  
+  return {
+    to: fields.email,
+    subject: `✅ Customization Request Confirmation #${orderId} - Marcoenzolani`,
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; }
+          .header { background: #f0f9ff; padding: 30px; text-align: center; border-radius: 10px; margin-bottom: 30px; }
+          .content { padding: 20px; }
+          .section { margin: 25px 0; padding: 20px; border-radius: 8px; background: #ffffff; border: 1px solid #e1e8ed; }
+          .section-title { color: #2c3e50; font-size: 20px; margin-top: 0; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #f0f0f0; }
+          .field { margin: 15px 0; padding: 10px 0; }
+          .field-label { font-weight: bold; color: #555; display: inline-block; min-width: 160px; }
+          .order-id {
+            font-family: monospace;
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+            background: #f8f9fa;
+            padding: 10px 20px;
+            border-radius: 8px;
+            display: inline-block;
+            margin: 10px 0;
+          }
+          .thank-you { 
+            background: #e8f5e9; 
+            padding: 25px; 
+            border-radius: 10px; 
+            text-align: center;
+            margin: 30px 0;
+            border-left: 4px solid #4CAF50;
+          }
+          .next-steps { 
+            background: #fff3e0; 
+            padding: 25px; 
+            border-radius: 10px; 
+            margin: 30px 0;
+            border-left: 4px solid #FF9800;
+          }
+          .contact-info { 
+            background: #e3f2fd; 
+            padding: 25px; 
+            border-radius: 10px; 
+            margin: 30px 0;
+            border-left: 4px solid #2196F3;
+          }
+          .footer { 
+            text-align: center; 
+            padding: 25px; 
+            color: #666; 
+            font-size: 14px;
+            border-top: 1px solid #e0e0e0;
+            margin-top: 40px;
+          }
+          .status-badge {
+            display: inline-block;
+            padding: 6px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            background: #4CAF50;
+            color: white;
+          }
+          .logo { max-width: 200px; margin: 0 auto 20px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1 style="color: #2c3e50; margin-bottom: 10px;">Thank You, ${escapeHtml(fields.name || 'Valued Customer')}!</h1>
+          <p style="color: #666; font-size: 18px;">Your customization request has been received successfully.</p>
+          <div class="order-id">#${orderId}</div>
+        </div>
+        
+        <div class="content">
+          <div class="thank-you">
+            <h2 style="color: #2c3e50; margin-top: 0;">🎉 Request Submitted Successfully!</h2>
+            <p style="font-size: 16px; line-height: 1.6;">
+              Thank you for choosing Marcoenzolani for your customization needs. 
+              We've received your request and our team will review it shortly.
+            </p>
+          </div>
+          
+          <div class="section">
+            <h3 class="section-title">📋 Request Summary</h3>
+            <div class="field">
+              <span class="field-label">Request ID:</span> #${orderId}
+            </div>
+            <div class="field">
+              <span class="field-label">Date & Time:</span> ${new Date().toLocaleString()}
+            </div>
+            <div class="field">
+              <span class="field-label">Status:</span> <span class="status-badge">Submitted</span>
+            </div>
+            <div class="field">
+              <span class="field-label">Product:</span> ${escapeHtml(fields.product_title || 'Custom Product')}
+            </div>
+            <div class="field">
+              <span class="field-label">Files Uploaded:</span> ${validFiles.length} file(s)
+            </div>
+          </div>
+          
+          <div class="section">
+            <h3 class="section-title">🎨 Your Customization Choices</h3>
+            <div class="field">
+              <span class="field-label">Leather Color:</span> ${getOptionText(fields.custom_option_lc, fields.custom_option_lc_other)}
+            </div>
+            <div class="field">
+              <span class="field-label">Leather Type:</span> ${getOptionText(fields.custom_option_lt, fields.custom_option_lt_other)}
+            </div>
+            <div class="field">
+              <span class="field-label">Inner Lining:</span> ${getOptionText(fields.custom_option_il, fields.custom_option_il_other)}
+            </div>
+            <div class="field">
+              <span class="field-label">Hardware Color:</span> ${getOptionText(fields.custom_option_hc, fields.custom_option_hc_other)}
+            </div>
+            ${fields.description ? `
+            <div class="field">
+              <span class="field-label">Additional Notes:</span> ${escapeHtml(fields.description)}
+            </div>
+            ` : ''}
+          </div>
+          
+          <div class="next-steps">
+            <h3 class="section-title">📅 What Happens Next?</h3>
+            <ol style="line-height: 1.8; padding-left: 20px;">
+              <li><strong>Review:</strong> Our team will review your customization request within 24 hours.</li>
+              <li><strong>Confirmation:</strong> We'll contact you to confirm the details and discuss any specifics.</li>
+              <li><strong>Pricing & Timeline:</strong> You'll receive a detailed quote and production timeline.</li>
+              <li><strong>Production:</strong> Once approved, our artisans will begin crafting your unique piece.</li>
+            </ol>
+          </div>
+          
+          <div class="contact-info">
+            <h3 class="section-title">📞 Need to Update Your Request?</h3>
+            <p style="margin: 15px 0;">
+              If you need to make any changes to your request or have additional questions, 
+              please contact us using your Request ID: <strong>#${orderId}</strong>
+            </p>
+            <p style="margin: 15px 0;">
+              <strong>Email:</strong> mrafay.developer@gmail.com<br>
+              <strong>Phone:</strong> [Your Business Phone Number]
+            </p>
+          </div>
+        </div>
+        
+        <div class="footer">
+          <p style="margin: 5px 0;">
+            <strong>Marcoenzolani Customizations</strong>
+          </p>
+          <p style="margin: 5px 0; font-size: 13px;">
+            Handcrafted Excellence Since [Year]
+          </p>
+          <p style="margin: 5px 0; font-size: 12px; color: #999;">
+            Request ID: #${orderId} | Submitted: ${new Date().toLocaleString()}
+          </p>
+          <p style="margin: 20px 0 0; font-size: 11px; color: #999;">
+            This is an automated confirmation email. Please do not reply to this message.
+          </p>
+        </div>
+      </body>
+      </html>
+    `,
+    text: `
+      =============================================
+      ✅ CUSTOMIZATION REQUEST CONFIRMATION
+      =============================================
+      
+      Thank you for your customization request with Marcoenzolani!
+      
+      REQUEST DETAILS:
+      -----------------
+      Request ID: #${orderId}
+      Date & Time: ${new Date().toLocaleString()}
+      Status: Submitted
+      Product: ${fields.product_title || 'Custom Product'}
+      Files Uploaded: ${validFiles.length}
+      
+      YOUR CUSTOMIZATION CHOICES:
+      ---------------------------
+      Leather Color: ${getOptionText(fields.custom_option_lc, fields.custom_option_lc_other)}
+      Leather Type: ${getOptionText(fields.custom_option_lt, fields.custom_option_lt_other)}
+      Inner Lining: ${getOptionText(fields.custom_option_il, fields.custom_option_il_other)}
+      Hardware Color: ${getOptionText(fields.custom_option_hc, fields.custom_option_hc_other)}
+      
+      ${fields.description ? `
+      Additional Notes:
+      ${fields.description}
+      ` : ''}
+      
+      WHAT HAPPENS NEXT?
+      ------------------
+      1. Review: Our team will review your request within 24 hours
+      2. Confirmation: We'll contact you to confirm details
+      3. Pricing & Timeline: You'll receive a detailed quote
+      4. Production: Our artisans will craft your unique piece
+      
+      NEED TO UPDATE YOUR REQUEST?
+      ----------------------------
+      Please contact us using your Request ID: #${orderId}
+      
+      Email: mrafay.developer@gmail.com
+      Phone: [Your Business Phone Number]
+      
+      =============================================
+      THANK YOU FOR CHOOSING Marcoenzolani
+      =============================================
+      
+      Request ID: #${orderId}
+      Submitted: ${new Date().toLocaleString()}
+      
+      This is an automated confirmation email. Please do not reply.
+      =============================================
     `
   };
 }
