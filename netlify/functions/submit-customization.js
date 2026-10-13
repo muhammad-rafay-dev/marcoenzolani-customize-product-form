@@ -5,8 +5,8 @@ const CONFIG = {
   // GMAIL_APP_PASSWORD: "btol kvrd hmel jfym",
   // NOTIFICATION_EMAIL: "mrafay.developer@gmail.com",
   GMAIL_USER: process.env.GMAIL_USER,
-  GMAIL_APP_PASSWORD: "btol kvrd hmel jfym",
-  NOTIFICATION_EMAIL: "mrafay.developer@gmail.com",
+  GMAIL_APP_PASSWORD: process.env.GMAIL_APP_PASSWORD,
+  NOTIFICATION_EMAIL: process.env.NOTIFICATION_EMAIL,
   
   // Optional: Add a simple obfuscation
   getCredentials: function() {
