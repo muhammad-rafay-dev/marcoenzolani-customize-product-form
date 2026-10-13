@@ -34,6 +34,13 @@ exports.handler = async function(event, context) {
   try {
     // Parse the multipart form data
     const { fields, files } = await parseFormData(event);
+
+    const validFiles = files.filter(file =>
+      file.filename &&
+      file.filename.trim() !== '' &&
+      file.size > 0 &&
+      Buffer.isBuffer(file.content)
+    );
     
     console.log(`📨 Received submission with ${files.length} files`);
     console.log('📝 Form fields:', Object.keys(fields));
@@ -46,7 +53,7 @@ exports.handler = async function(event, context) {
     const userEmailContent = prepareUserEmailContent(fields, files, orderId);
     
     // Send email to admin WITH attachments
-    await sendGmail(adminEmailContent, files, true);
+    await sendGmail(adminEmailContent, validFiles, true);
     
     // Send confirmation email to user WITHOUT attachments
     if (fields.email) {
@@ -67,7 +74,7 @@ exports.handler = async function(event, context) {
         success: true,
         id: orderId,
         message: 'Customization request submitted successfully!',
-        files_received: files.length,
+        files_received: validFiles.length,
         confirmation_sent: !!fields.email
       })
     };
@@ -97,20 +104,63 @@ function parseFormData(event) {
       console.log(`📋 Field: ${name} = ${value}`);
     });
     
+    // busboy.on('file', (name, file, info) => {
+    //   const chunks = [];
+    //   file.on('data', (chunk) => chunks.push(chunk));
+    //   file.on('end', () => {
+    //     const content = Buffer.concat(chunks);
+    //     const fileData = {
+    //       fieldName: name,
+    //       filename: info.filename,
+    //       mimeType: info.mimeType,
+    //       content,
+    //       size: content.length
+    //     };
+    //     files.push(fileData);
+    //     console.log(`📎 File: ${name} - ${info.filename} (${(fileData.size / 1024).toFixed(2)} KB)`);
+    //   });
+    // });
     busboy.on('file', (name, file, info) => {
       const chunks = [];
-      file.on('data', (chunk) => chunks.push(chunk));
+
+      // Ignore file inputs where the user did not select a file
+      if (!info.filename || info.filename.trim() === '') {
+      file.resume();
+      return;
+      }
+
+      file.on('data', (chunk) => {
+      chunks.push(chunk);
+      });
+
       file.on('end', () => {
-        const content = Buffer.concat(chunks);
-        const fileData = {
-          fieldName: name,
-          filename: info.filename,
-          mimeType: info.mimeType,
-          content,
-          size: content.length
-        };
-        files.push(fileData);
-        console.log(`📎 File: ${name} - ${info.filename} (${(fileData.size / 1024).toFixed(2)} KB)`);
+      const content = Buffer.concat(chunks);
+
+      // Do not add empty or invalid files
+      if (content.length === 0) {
+        console.log(`⚠️ Skipping empty file input: ${name}`);
+        return;
+      }
+
+      const fileData = {
+        fieldName: name,
+        filename: info.filename,
+        mimeType: info.mimeType,
+        content,
+        size: content.length
+      };
+
+      files.push(fileData);
+
+      console.log(
+        `📎 Valid file: ${name} - ${info.filename} (${(content.length / 1024).toFixed(2)} KB)`
+      );
+
+      });
+
+      file.on('error', (err) => {
+        console.error(`❌ File parsing error (${name}):`, err);
+        reject(err);
       });
     });
     
@@ -161,12 +211,27 @@ async function sendGmail(emailContent, files, includeAttachments = false) {
   });
   
   // Prepare attachments if needed
-  const attachments = includeAttachments 
-    ? files.map(file => ({
+  // const attachments = includeAttachments 
+  //   ? files.map(file => ({
+  //       filename: file.filename,
+  //       content: file.content,
+  //       contentType: file.mimeType || 'application/octet-stream',
+  //       encoding: 'base64'
+  //     }))
+  //   : [];
+  const validFiles = (files || []).filter(file =>
+    file &&
+    typeof file.filename === 'string' &&
+    file.filename.trim() !== '' &&
+    Buffer.isBuffer(file.content) &&
+    file.content.length > 0
+  );
+
+  const attachments = includeAttachments
+    ? validFiles.map(file => ({
         filename: file.filename,
         content: file.content,
-        contentType: file.mimeType || 'application/octet-stream',
-        encoding: 'base64'
+        contentType: file.mimeType || 'application/octet-stream'
       }))
     : [];
   
