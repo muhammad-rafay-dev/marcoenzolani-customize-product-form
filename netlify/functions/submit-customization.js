@@ -1,7 +1,10 @@
 // Store credentials in the function (not ideal but free)
 const CONFIG = {
   // Replace these with your actual values
-  GMAIL_USER: "mrafay.developer@gmail.com",
+  // GMAIL_USER: "mrafay.developer@gmail.com",
+  // GMAIL_APP_PASSWORD: "btol kvrd hmel jfym",
+  // NOTIFICATION_EMAIL: "mrafay.developer@gmail.com",
+  GMAIL_USER: process.env.GMAIL_USER,
   GMAIL_APP_PASSWORD: "btol kvrd hmel jfym",
   NOTIFICATION_EMAIL: "mrafay.developer@gmail.com",
   
@@ -99,12 +102,13 @@ function parseFormData(event) {
       const chunks = [];
       file.on('data', (chunk) => chunks.push(chunk));
       file.on('end', () => {
+        const content = Buffer.concat(chunks);
         const fileData = {
           fieldName: name,
           filename: info.filename,
           mimeType: info.mimeType,
-          content: Buffer.concat(chunks),
-          size: Buffer.concat(chunks).length
+          content,
+          size: content.length
         };
         files.push(fileData);
         console.log(`📎 File: ${name} - ${info.filename} (${(fileData.size / 1024).toFixed(2)} KB)`);
