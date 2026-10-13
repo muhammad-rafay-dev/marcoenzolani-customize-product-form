@@ -10,7 +10,7 @@ const CONFIG = {
   
   // Optional: Add a simple obfuscation
   getCredentials: function() {
-    return {
+    return { 
       user: this.GMAIL_USER,
       pass: this.GMAIL_APP_PASSWORD,
       to: this.NOTIFICATION_EMAIL
