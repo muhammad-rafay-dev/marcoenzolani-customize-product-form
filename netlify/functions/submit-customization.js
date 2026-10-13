@@ -2,7 +2,6 @@
 const CONFIG = {
   // Replace these with your actual values
   // GMAIL_USER: "mrafay.developer@gmail.com",
-  // GMAIL_APP_PASSWORD: "btol kvrd hmel jfym",
   // NOTIFICATION_EMAIL: "mrafay.developer@gmail.com",
   GMAIL_USER: process.env.GMAIL_USER,
   GMAIL_APP_PASSWORD: process.env.GMAIL_APP_PASSWORD,
