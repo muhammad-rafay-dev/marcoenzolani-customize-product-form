@@ -755,8 +755,7 @@ function prepareUserEmailContent(fields, files, orderId) {
               please contact us using your Request ID: <strong>#${orderId}</strong>
             </p>
             <p style="margin: 15px 0;">
-              <strong>Email:</strong> mrafay.developer@gmail.com<br>
-              <strong>Phone:</strong> [Your Business Phone Number]
+              <strong>Email:</strong> marcoenzolani@gmail.com<br>
             </p>
           </div>
         </div>
@@ -813,7 +812,7 @@ function prepareUserEmailContent(fields, files, orderId) {
       ----------------------------
       Please contact us using your Request ID: #${orderId}
       
-      Email: mrafay.developer@gmail.com
+      Email: marcoenzolani@gmail.com
       
       =============================================
       THANK YOU FOR CHOOSING Marcoenzolani
